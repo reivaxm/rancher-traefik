@@ -17,73 +17,61 @@ TRAEFIK_K8S_ENABLE=${TRAEFIK_K8S_ENABLE:-"false"}
 TRAEFIK_K8S_OPTS=${TRAEFIK_K8S_OPTS:-""}
 TRAEFIK_RANCHER_ENDPOINT=${TRAEFIK_RANCHER_ENDPOINT}
 TRAEFIK_RANCHER_DOMAIN=${TRAEFIK_RANCHER_DOMAIN}
-TRAEFIK_RANCHER_ACCESS_KEY=${$TRAEFIK_RANCHER_ACCESSKEY}
+TRAEFIK_RANCHER_ACCESS_KEY=${TRAEFIK_RANCHER_ACCESSKEY}
 TRAEFIK_RANCHER_SECRET_KEY=${TRAEFIK_RANCHER_SECRET}
 
-TRAEFIK_ENTRYPOINTS_HTTP="\
-  [entryPoints.http]
+TRAEFIK_ENTRYPOINTS_HTTP="
+  [entryPoints.web]
     address = \":${TRAEFIK_HTTP_PORT}\"
-    [entryPoints.http.redirect]
-      entryPoint = \"https\"
-"
-
+    [entryPoints.web.redirect]
+      entryPoint = \"websecure\""
 
 if [ "X${TRAEFIK_ACME_ENABLE}" == "Xfalse" ]; then
-
-TRAEFIK_ENTRYPOINTS_HTTPS="\
-  [entryPoints.https]
+TRAEFIK_ENTRYPOINTS_HTTPS="
+  [entryPoints.websecure]
     address = \":${TRAEFIK_HTTPS_PORT}\"
-    [entryPoints.https.tls]"
-       TRAEFIK_ENTRYPOINTS_HTTPS=$TRAEFIK_ENTRYPOINTS_HTTPS"
-      [[entryPoints.https.tls.certificates]]
+    [entryPoints.websecure.tls]
+      [[entryPoints.websecure.tls.certificates]]
         certFile = \"$TRAEFIK_SSL_CERT\"
-        keyFile = \"$TRAEFIK_SSL_PRIVATE_KEY\"
-"
-
+        keyFile = \"$TRAEFIK_SSL_PRIVATE_KEY\""
 else
-
-TRAEFIK_ENTRYPOINTS_HTTPS="\
-  [entryPoints.https]
+TRAEFIK_ENTRYPOINTS_HTTPS="
+  [entryPoints.websecure]
     address = \":${TRAEFIK_HTTPS_PORT}\"
-    [entryPoints.https.tls]
-"
-
+  [entryPoints.websecure.http.tls]
+    certResolver = \"traefikresolver\""
 fi
 
-
-
 if [ "X${TRAEFIK_HTTPS_ENABLE}" == "Xtrue" ]; then
-    TRAEFIK_ENTRYPOINTS_OPTS=${TRAEFIK_ENTRYPOINTS_HTTP}${TRAEFIK_ENTRYPOINTS_HTTPS}
-    TRAEFIK_ENTRYPOINTS='"http", "https"'
+    TRAEFIK_ENTRYPOINTS_OPTS="
+${TRAEFIK_ENTRYPOINTS_HTTP}
+${TRAEFIK_ENTRYPOINTS_HTTPS}"
+    TRAEFIK_ENTRYPOINTS='"web", "websecure"'
 elif [ "X${TRAEFIK_HTTPS_ENABLE}" == "Xonly" ]; then
-    TRAEFIK_ENTRYPOINTS_HTTP=$TRAEFIK_ENTRYPOINTS_HTTP"\
-"
-    TRAEFIK_ENTRYPOINTS_OPTS=${TRAEFIK_ENTRYPOINTS_HTTP}${TRAEFIK_ENTRYPOINTS_HTTPS}
-    TRAEFIK_ENTRYPOINTS='"http", "https"'
+    TRAEFIK_ENTRYPOINTS_OPTS="
+${TRAEFIK_ENTRYPOINTS_HTTP}
+${TRAEFIK_ENTRYPOINTS_HTTPS}"
+    TRAEFIK_ENTRYPOINTS='"web", "websecure"'
 else
     TRAEFIK_ENTRYPOINTS_OPTS=${TRAEFIK_ENTRYPOINTS_HTTP}
-    TRAEFIK_ENTRYPOINTS='"http"'
+    TRAEFIK_ENTRYPOINTS='"web"'
 fi
 
 if [ "X${TRAEFIK_K8S_ENABLE}" == "Xtrue" ]; then
-    TRAEFIK_K8S_OPTS="[kubernetes]"
+TRAEFIK_K8S_OPTS="
+[kubernetes]"
 fi
 
 TRAEFIK_ACME_CFG=""
 if [ "X${TRAEFIK_HTTPS_ENABLE}" == "Xtrue" ] || [ "X${TRAEFIK_HTTPS_ENABLE}" == "Xonly" ] && [ "X${TRAEFIK_ACME_ENABLE}" == "Xtrue" ]; then
-
-    TRAEFIK_ACME_CFG="\
-[acme]
-email = \"${TRAEFIK_ACME_EMAIL}\"
-storage = \"${SERVICE_HOME}/acme/acme.json\"
-onDemand = ${TRAEFIK_ACME_ONDEMAND}
-OnHostRule = ${TRAEFIK_ACME_ONHOSTRULE}
-entryPoint = \"https\"
-"
-
+TRAEFIK_ACME_CFG="
+[certificatesResolvers.traefikresolver.acme]
+  email = \"${TRAEFIK_ACME_EMAIL}\"
+  storage = \"${SERVICE_HOME}/acme/acme.json\"
+  [certificatesResolvers.traefikresolver.acme.tlsChallenge]"
 fi
 
-cat << EOF > ${SERVICE_HOME}/etc/traefik.toml
+cat > ${SERVICE_HOME}/etc/traefik.toml << EOF
 # traefik.toml
 debug = ${TRAEFIK_DEBUG}
 logLevel = "${TRAEFIK_LOG_LEVEL}"
@@ -94,9 +82,7 @@ defaultEntryPoints = [${TRAEFIK_ENTRYPOINTS}]
 ${TRAEFIK_ENTRYPOINTS_OPTS}
 [web]
 address = ":${TRAEFIK_ADMIN_PORT}"
-
 ${TRAEFIK_K8S_OPTS}
-
 [rancher]
 domain = "${TRAEFIK_RANCHER_DOMAIN}"
 Watch = true
